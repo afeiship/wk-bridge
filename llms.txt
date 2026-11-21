@@ -1,0 +1,79 @@
+# @jswork/wk-bridge
+
+> Promise-based H5 bridge for WKWebView: typed calls, events, zero dependencies.
+
+`@jswork/wk-bridge` is the page-side client for a Swift `WKWebView` host. It
+implements a JSON request/response/event protocol over one
+`WKScriptMessageHandler` channel, with Promise-based calls, per-call timeouts,
+`AbortSignal` cancellation, typed methods and events, error codes, and an
+in-memory mock for browser development and tests.
+
+## Install
+
+```shell
+pnpm add @jswork/wk-bridge
+```
+
+## Public API
+
+- `createBridge<Methods, Events>(options?)` — create the bridge.
+- `createMockBridge<Methods, Events>(handlers, options?)` — in-memory bridge.
+- `BridgeError` — error with `code`, `message`, `method`, `data`, `cause`; guard
+  with `BridgeError.is(value)`.
+- `ErrorCodes` — `TIMEOUT`, `ABORTED`, `BRIDGE_UNAVAILABLE`, `DISPOSED`,
+  `INVALID_METHOD`, `TRANSPORT_ERROR`, `UNKNOWN`, `UNKNOWN_METHOD`,
+  `HANDLER_ERROR`.
+- `VERSION` — `1.0.0`.
+
+Bridge instance: `call(method, params?, { timeout, signal })`, `on`, `once`,
+`off`, `receive`, `available`, `pendingCount`, `channel`, `version`, `destroy`.
+Mock instance adds `emit` and `calls`.
+
+## Options
+
+`channel` (default `bridge`), `timeout` (default `10000` ms), `debug`,
+`global`, `receiveKey` (`__wkbridge__`), `inboxKey` (`__wkbridgeInbox__`),
+`installGlobal`, `idPrefix` (`r`), `transport`, `onListenerError`.
+
+## Usage
+
+```ts
+import { createBridge } from '@jswork/wk-bridge';
+
+interface Methods {
+  'app.info': { params: { verbose?: boolean }; result: { platform: string } };
+}
+
+const bridge = createBridge<Methods>({ timeout: 15_000 });
+const info = await bridge.call('app.info', { verbose: true });
+bridge.on('theme.changed', ({ theme }) => applyTheme(theme));
+```
+
+```ts
+import { createMockBridge } from '@jswork/wk-bridge';
+
+const bridge = createMockBridge({
+  'app.info': () => ({ platform: 'browser' }),
+});
+```
+
+## Protocol
+
+Requests: `{ id, method, params }`.
+Responses: `{ type: "response", id, ok: true, result }` or
+`{ type: "response", id, ok: false, error: { code, message, data } }`.
+Events: `{ type: "event", event, data }`.
+H5 → native via `window.webkit.messageHandlers[channel].postMessage(message)`;
+native → H5 via `window.__wkbridge__?.receive(payload)` using
+`callAsyncJavaScript(..., contentWorld: .page)`. Early messages can be queued in
+`window.__wkbridgeInbox__`.
+
+## Docs
+
+- [README](./README.md)
+- [Protocol](./docs/protocol.md)
+- [Native integration](./docs/native-integration.md)
+
+## Repository
+
+https://github.com/afeiship/wk-bridge
